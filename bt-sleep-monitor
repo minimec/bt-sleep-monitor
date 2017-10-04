@@ -70,11 +70,8 @@ sleeplock() {
 }
 
 dbuslisten() {
-    # Defaults @start
-    echo $(pidof bluetooth-ng) > /var/run/bluetooth-ng.pid 
-    echo "1" > /proc/bluetooth/sleep/lpm
-    echo "False" > /tmp/sleeplock
-    printf "\nBluetooth Sleep Monitor started (suspend 'on')\n"
+    # Create PID-file
+    echo $(pidof bt-sleep-monitor) > /var/run/bt-sleep-monitor.pid 
 
     # Dbus listener
     WATCH1="path='/net/connman/technology/bluetooth',interface='net.connman.Technology',member='SetProperty'"
@@ -91,11 +88,14 @@ dbuslisten() {
     }
 
 start() {
+    echo "1" > /proc/bluetooth/sleep/lpm
+    echo "False" > /tmp/sleeplock
+    printf "\nBluetooth Sleep Monitor started (suspend 'on')\n"
     dbuslisten &
 }
 
 stop() {
-    pkill -P $(cat /var/run/bluetooth-ng.pid) && rm /var/run/bluetooth-ng.pid
+    pkill -P $(cat /var/run/bt-sleep-monitor.pid) && rm /var/run/bt-sleep-monitor.pid
     echo "0" > /proc/bluetooth/sleep/lpm
     echo "False" > /tmp/sleeplock
     printf "\nBluetooth Sleep Monitor stopped (suspend 'off')\n"
@@ -107,8 +107,8 @@ restart() {
 }
 
 status() {
-    if [ -e /var/run/bluetooth-ng.pid ]; then
-       echo Bluetooth Sleep Monitor is running, pid=`cat /var/run/bluetooth-ng.pid`
+    if [ -e /var/run/bt-sleep-monitor.pid ]; then
+       echo Bluetooth Sleep Monitor is running, pid=`cat /var/run/bt-sleep-monitor.pid`
     else
        echo Bluetooth Sleep Monitor is NOT running
        exit 1
