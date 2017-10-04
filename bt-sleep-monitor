@@ -1,18 +1,20 @@
 #!/bin/bash
-#title           : bt-sleep-monitor-ng.sh
+#title           : bt-sleep-monitor
 #description     : Bluetooth 'LowPowerMode' monitor for SailfishOS ports that face a bluetooth wakelock bug.
 #author          : minimec
-#date            : 20171001
-#version         : 0.6 ('next generation')
-#usage           : Usage: bt-sleep-monitor {start|stop|status|restart} &
-#notes           : Best use as systemd service
+#date            : 20171004
+#version         : 0.6 ('next generation') / Complete rewrite
+#usage           : Usage: bt-sleep-monitor {start|stop|status|restart}
+#notes           : Can be used as standalone program or as systemd service
 #==============================================================================
-#How it works... : LowPowerMode is disabled in two cases:
-#                    - by enabling the bluetooth adapter, in case it is 'disabled'.
-#                    - by powering on the display, in case the adapter is 'enabled'.
-#                  The script switches between these modes automatically.
-#                  After an 'action' is triggered you have 120sec. (default value) to connect a device.
-#                  In case a device is connected, the script listens for 'disconnect' and will enable LPM again afterwards.
+#How it works... : A dbus-monitor process is listening for different dbus events in parallel:
+#                    - Bluetooth power on/off
+#                    - Bluetooth connections
+#                    - Display events
+#                  When an event is triggered the program will decide whether to enable/disable 
+#                  or temporarily disable bluetooth suspend (low power mode).
+#                  If bluetooth is powered and in low power mode, a display event will disable suspend mode for a given time.
+#                  In case there is no bluetooth connection after that time, suspend mode is enabled again. See $BTACTIVE.    
 #==============================================================================
 
 ## tmp file
