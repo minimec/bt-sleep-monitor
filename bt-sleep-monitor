@@ -127,8 +127,6 @@ elif [[ $# -eq 1 && $1 == "--blueconnect" ]]; then
     blueconnect
 elif [[ $# -eq 1 && $1 == "--display" ]]; then
     display
-elif [[ $# -eq 1 && $1 == "--sleeplock" ]]; then
-    sleeplock
 elif [[ $# -eq 1 && $1 == "start" ]]; then
     start
 elif [[ $# -eq 1 && $1 == "stop" ]]; then
