@@ -3,7 +3,7 @@
 #description     : Bluetooth 'LowPowerMode' monitor for SailfishOS ports that face a bluetooth wakelock bug.
 #author          : minimec
 #date            : 20171004
-#version         : 0.6 ('next generation') / Complete rewrite
+#version         : 0.7 ('next generation') / Complete rewrite
 #usage           : Usage: bt-sleep-monitor {start|stop|status|restart}
 #notes           : Can be used as standalone program or as systemd service
 #==============================================================================
@@ -18,55 +18,56 @@
 #==============================================================================
 
 ## tmp file
-touch /tmp/sleeplock
+touch /tmp/sleeptimer
 
 ## Variables
 BTACTIVE=60
 BTPOWER=$(connmanctl technologies | sed -n -e '/bluetooth/,+5p' | grep Powered | awk '{print $3; exit}')
 BTCONNECT=$(hcitool con | grep ACL)
-SLEEPLOCK=$(cat /tmp/sleeplock)
+SLEEPTIMER=$(cat /tmp/sleeptimer)
 
 ## Functions
 bluepower() {
     if [ "$BTPOWER" == "True" ] ; then
         echo "0" > /proc/bluetooth/sleep/lpm
-        printf "bluepower 'on' (suspend 'off' for $BTACTIVE seconds) \n"
-        sleeplock &
+        printf "bluepower 'on' (timer) \n"
+        sleeptimer &
     else
         echo "1" > /proc/bluetooth/sleep/lpm
-        printf "bluepower 'off' (suspend 'on') \n"
+        printf "bluepower 'off' (on) \n"
     fi
 }
 
 blueconnect() {
     sleep 2
     if  [ "$(hcitool con | grep ACL)" == "" ] ; then
-        echo "1" > /proc/bluetooth/sleep/lpm
-        printf "blueconnect 'device removed' (suspend 'on') \n"
+#        echo "1" > /proc/bluetooth/sleep/lpm
+        printf "blueconnect 'no connection' (timer) \n"
+        sleeptimer &
     else
-        printf "blueconnect 'device connected' \n"
+        printf "blueconnect 'connection' (-) \n"
     fi 
 }
 
 display() {
-    if [ "$BTPOWER" == "True" ] && [ "$BTCONNECT" == "" ] && [ "$SLEEPLOCK" == "False" ] ; then
+    if [ "$BTPOWER" == "True" ] && [ "$BTCONNECT" == "" ] && [ "$SLEEPTIMER" == "False" ] ; then
         echo "0" > /proc/bluetooth/sleep/lpm
-        printf "display 'event' (suspend 'off' for $BTACTIVE seconds) \n" 
-        sleeplock &
+        printf "display 'event' (timer) \n" 
+        sleeptimer &
     else
-        printf "display 'event' (ignored) \n"
+        printf "display 'event' (-) \n"
     fi     
 }
 
-sleeplock() {
-    echo "True" > /tmp/sleeplock
+sleeptimer() {
+    echo "True" > /tmp/sleeptimer
     sleep $BTACTIVE
     if  [ "$(hcitool con | grep ACL)" == "" ] ; then
         echo "1" > /proc/bluetooth/sleep/lpm
-        printf "sleeplock 'no connection after $BTACTIVE seconds' (suspend 'on') \n"
-        echo "False" > /tmp/sleeplock
+        printf "timer 'no connection' (on) \n"
+        echo "False" > /tmp/sleeptimer
     else
-        echo "False" > /tmp/sleeplock
+        echo "False" > /tmp/sleeptimer
     fi
     exit 0
 }
@@ -77,11 +78,10 @@ dbuslisten() {
 
     # Dbus listener
     WATCH1="path='/net/connman/technology/bluetooth',interface='net.connman.Technology',member='SetProperty'"
-    WATCH2="interface='org.bluez.Control',member='PropertyChanged'"
-    WATCH3="interface='org.bluez.Device',member='PropertyChanged'"
-    WATCH4="interface='com.nokia.mce.signal',member='display_status_ind'"
+    WATCH2="interface='org.bluez.Device',member='PropertyChanged'"
+    WATCH3="interface='com.nokia.mce.signal',member='display_status_ind'"
 
-    dbus-monitor --system "${WATCH1}" "${WATCH2}" "${WATCH3}" "${WATCH4}" | \
+    dbus-monitor --system "${WATCH1}" "${WATCH2}" "${WATCH3}" | \
     awk '
     /member=SetProperty/ { system("'$0' --bluepower") }
     /member=PropertyChanged/ { system("'$0' --blueconnect") }
@@ -91,16 +91,16 @@ dbuslisten() {
 
 start() {
     echo "1" > /proc/bluetooth/sleep/lpm
-    echo "False" > /tmp/sleeplock
-    printf "\nBluetooth Sleep Monitor started (suspend 'on')\n"
+    echo "False" > /tmp/sleeptimer
+    printf "Bluetooth Sleep Monitor started (on)\n"
     dbuslisten &
 }
 
 stop() {
     pkill -P $(cat /var/run/bt-sleep-monitor.pid) && rm /var/run/bt-sleep-monitor.pid
     echo "0" > /proc/bluetooth/sleep/lpm
-    echo "False" > /tmp/sleeplock
-    printf "\nBluetooth Sleep Monitor stopped (suspend 'off')\n"
+    rm /tmp/sleeptimer
+    printf "Bluetooth Sleep Monitor stopped (off)\n"
 }
 
 restart() {
