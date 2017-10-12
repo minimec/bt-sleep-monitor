@@ -2,9 +2,9 @@
 #title           : bt-sleep-monitor
 #description     : Bluetooth 'LowPowerMode' monitor for SailfishOS ports that face a bluetooth wakelock bug.
 #author          : minimec
-#date            : 20171004
-#version         : 0.7 ('next generation') / Complete rewrite
-#usage           : Usage: bt-sleep-monitor {start|stop|status|restart}
+#date            : 20171012
+#version         : 0.7 ('next generation') / 'Talk Maemo'
+#usage           : Usage: bt-sleep-monitor {start|stop|status}
 #notes           : Can be used as standalone program or as systemd service
 #==============================================================================
 #How it works... : A dbus-monitor process is listening for different dbus events in parallel:
@@ -15,6 +15,7 @@
 #                  or temporarily disable bluetooth suspend (low power mode).
 #                  If bluetooth is powered and in low power mode, a display event will disable suspend mode for a given time.
 #                  In case there is no bluetooth connection after that time, suspend mode is enabled again. See $BTACTIVE.    
+#Monitor...      : After having launched the script in a console, you can follow a log, as long the console stays open. 
 #==============================================================================
 
 ## tmp file
@@ -34,6 +35,7 @@ bluepower() {
         sleeptimer &
     else
         echo "1" > /proc/bluetooth/sleep/lpm
+        echo "0" > /tmp/sleeptimer
         printf "bluepower 'off' (on) \n"
     fi
 }
@@ -50,7 +52,7 @@ blueconnect() {
 }
 
 display() {
-    if [ "$BTPOWER" == "True" ] && [ "$BTCONNECT" == "" ] && [ "$SLEEPTIMER" == "False" ] ; then
+    if [ "$BTPOWER" == "True" ] && [ "$BTCONNECT" == "" ] && [ "$SLEEPTIMER" == "0" ] ; then
         echo "0" > /proc/bluetooth/sleep/lpm
         printf "display 'event' (timer) \n" 
         sleeptimer &
@@ -60,14 +62,19 @@ display() {
 }
 
 sleeptimer() {
-    echo "True" > /tmp/sleeptimer
+    echo "$(($(cat /tmp/sleeptimer)+1))" > /tmp/sleeptimer 
     sleep $BTACTIVE
-    if  [ "$(hcitool con | grep ACL)" == "" ] ; then
+    if [ "$(cat /tmp/sleeptimer)" -gt "1" ] ; then
+        echo "$(($(cat /tmp/sleeptimer)-1))" > /tmp/sleeptimer
+        exit 0
+    elif [ "$(cat /tmp/sleeptimer)" -eq "0" ] ; then
+        exit 0
+    elif [ "$(hcitool con | grep ACL)" == "" ] ; then
         echo "1" > /proc/bluetooth/sleep/lpm
         printf "timer 'no connection' (on) \n"
-        echo "False" > /tmp/sleeptimer
+        echo "0" > /tmp/sleeptimer
     else
-        echo "False" > /tmp/sleeptimer
+        echo "0" > /tmp/sleeptimer
     fi
     exit 0
 }
@@ -91,7 +98,7 @@ dbuslisten() {
 
 start() {
     echo "1" > /proc/bluetooth/sleep/lpm
-    echo "False" > /tmp/sleeptimer
+    echo "0" > /tmp/sleeptimer
     printf "Bluetooth Sleep Monitor started (on)\n"
     dbuslisten &
 }
@@ -101,11 +108,7 @@ stop() {
     echo "0" > /proc/bluetooth/sleep/lpm
     rm /tmp/sleeptimer
     printf "Bluetooth Sleep Monitor stopped (off)\n"
-}
-
-restart() {
-    $0 stop
-    $0 start &
+    killall bt-sleep-monitor
 }
 
 status() {
@@ -133,9 +136,6 @@ elif [[ $# -eq 1 && $1 == "stop" ]]; then
     stop
 elif [[ $# -eq 1 && $1 == "status" ]]; then
     status
-elif [[ $# -eq 1 && $1 == "restart" ]]; then
-    restart
-
 else
-    echo "Usage: $0 {start|stop|status|restart}"
+    echo "Usage: $0 {start|stop|status}"
 fi
